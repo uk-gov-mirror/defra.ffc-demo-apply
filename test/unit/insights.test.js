@@ -1,52 +1,56 @@
-jest.mock('applicationinsights', () => {
-  const tags = {}
-  const keys = { cloudRole: 'cloudRole' }
-  const defaultClient = { context: { keys, tags }, addTelemetryProcessor: jest.fn().mockReturnThis() }
-  const start = jest.fn().mockReturnThis()
-  const setup = jest.fn(() => ({ start }))
-  return { defaultClient, setup }
-})
-
-const appInsights = require('applicationinsights')
-const { setup } = require('../../app/insights')
-
-describe('insights setup', () => {
-  const ORIGINAL_ENV = process.env
+describe('Application Insights', () => {
+  const DEFAULT_ENV = process.env
+  let useAzureMonitor
 
   beforeEach(() => {
     jest.resetModules()
-    process.env = { ...ORIGINAL_ENV }
+
+    jest.mock('@azure/monitor-opentelemetry', () => ({
+      useAzureMonitor: jest.fn()
+    }))
+
+    useAzureMonitor = require('@azure/monitor-opentelemetry').useAzureMonitor
+
+    process.env = { ...DEFAULT_ENV }
   })
 
-  afterEach(() => {
-    process.env = ORIGINAL_ENV
-    jest.clearAllMocks()
+  afterAll(() => {
+    process.env = DEFAULT_ENV
   })
 
-  test('starts and sets cloud role when connection string present', () => {
-    process.env.APPINSIGHTS_CONNECTIONSTRING = 'InstrumentationKey=fake'
-    process.env.APPINSIGHTS_CLOUDROLE = 'ffc-demo-apply'
-    setup()
-    expect(appInsights.setup).toHaveBeenCalled()
-    expect(appInsights.defaultClient.context.tags.cloudRole).toBe('ffc-demo-apply')
+  test('does not setup application insights if no connection string', () => {
+    process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = undefined
+
+    const appInsights = require('../../app/insights')
+
+    appInsights.setup()
+
+    expect(useAzureMonitor).not.toHaveBeenCalled()
   })
 
-  test('does not start when no connection string', () => {
-    delete process.env.APPINSIGHTS_CONNECTIONSTRING
-    setup()
-    expect(appInsights.setup).not.toHaveBeenCalled()
-  })
+  test('does setup application insights if connection string present', () => {
+    process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = 'test-connection-string'
 
-  test('telemetry processor drops healthz requests', () => {
-    process.env.APPINSIGHTS_CONNECTIONSTRING = 'InstrumentationKey=fake'
-    process.env.APPINSIGHTS_CLOUDROLE = 'ffc-demo-apply'
-    setup()
+    const appInsights = require('../../app/insights')
 
-    const processor = appInsights.defaultClient.addTelemetryProcessor.mock.calls[0][0]
-    const healthzEnvelope = { data: { baseData: { url: 'https://example.test/healthz' } } }
-    const normalEnvelope = { data: { baseData: { url: 'https://example.test/apply' } } }
+    appInsights.setup()
 
-    expect(processor(healthzEnvelope)).toBe(false)
-    expect(processor(normalEnvelope)).toBe(true)
+    expect(useAzureMonitor).toHaveBeenCalledTimes(1)
+    expect(useAzureMonitor).toHaveBeenCalledWith({
+      azureMonitorExporterOptions: {
+        connectionString: 'test-connection-string'
+      },
+      instrumentationOptions: {
+        http: {
+          enabled: true,
+          ignoreIncomingRequestHook: expect.any(Function)
+        }
+      }
+    })
+
+    const options = useAzureMonitor.mock.calls[0][0]
+    expect(options.instrumentationOptions.http.ignoreIncomingRequestHook({ url: '/healthz' })).toBe(true)
+    expect(options.instrumentationOptions.http.ignoreIncomingRequestHook({ url: '/healthy' })).toBe(true)
+    expect(options.instrumentationOptions.http.ignoreIncomingRequestHook({ url: '/foo' })).toBe(false)
   })
 })
