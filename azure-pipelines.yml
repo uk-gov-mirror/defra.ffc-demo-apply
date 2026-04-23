@@ -29,7 +29,7 @@ resources:
       endpoint: DEFRA
       type: github
       name: defra/fcp-pipeline-common
-      ref: pl-1116
+      ref: pl-1154
 
 extends:
   template: fcp-common-pipeline.yaml@templates
@@ -48,7 +48,7 @@ extends:
       readinessProbe.failureThreshold: $(snd2_readinessProbe_failureThreshold)
     dev_params:
       livenessProbe.timeoutSeconds: $(dev_livenessProbe_timeoutSeconds)      
-    # failOnThreshold: high
+    failOnThreshold: high
     enableServiceNowChangeCreationDev: false
     enableServiceNowChangeCreation: true
-
+  
