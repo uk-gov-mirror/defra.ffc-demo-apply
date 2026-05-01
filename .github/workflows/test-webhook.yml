@@ -10,4 +10,6 @@ jobs:
   manage-webhook:
     uses: ./.github/workflows/pact-webhooks.yml
     with:
-      command: list
+      command: create
+      webhook_consumer: grants-ui
+      webhook_provider: grants-ui-backend

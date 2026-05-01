@@ -8,11 +8,6 @@ name: Pact Webhooks
 #       uses: ./.github/workflows/pact-webhooks.yml
 #       with:
 #         command: list
-#
-# No 'secrets: inherit' needed — PACT_USER, PACT_PASS and FFCPLATFORM_PAT
-# are environment variables baked into the self-hosted runner image.
-#
-# Or trigger manually via GitHub UI (Actions → Pact Webhooks → Run workflow).
 
 on:
   workflow_call:
@@ -35,10 +30,9 @@ on:
         required: false
         type: string
       target_repo:
-        description: 'GitHub repo path for the dispatch URL (e.g. DEFRA/grants-ui-backend)'
+        description: 'GitHub repo path for the dispatch URL. Defaults to DEFRA/<webhook_provider> if omitted.'
         required: false
         type: string
-        default: 'DEFRA/grants-ui-backend'
       event_type:
         description: 'GitHub event_type sent in the dispatch body'
         required: false
@@ -85,10 +79,9 @@ on:
         required: false
         type: string
       target_repo:
-        description: 'GitHub repo path for the dispatch URL'
+        description: 'GitHub repo path for the dispatch URL. Defaults to DEFRA/<webhook_provider> if omitted.'
         required: false
         type: string
-        default: 'DEFRA/grants-ui-backend'
       event_type:
         description: 'GitHub event_type sent in the dispatch body'
         required: false
@@ -165,7 +158,7 @@ jobs:
           BROKER_URL="$INPUT_BROKER_URL"
           CONSUMER="$INPUT_CONSUMER"
           PROVIDER="$INPUT_PROVIDER"
-          TARGET_REPO="$INPUT_TARGET_REPO"
+          TARGET_REPO="${INPUT_TARGET_REPO:-DEFRA/${PROVIDER}}"
           EVENT_TYPE="$INPUT_EVENT_TYPE"
           PACT_EVENT="$INPUT_PACT_EVENT"
           DESCRIPTION="$INPUT_DESCRIPTION"
