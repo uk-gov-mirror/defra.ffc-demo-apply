@@ -30,11 +30,14 @@ jobs:
           echo "this is the echo of the user, its a secret"
           curl -s -u "$PACT_USER:$PACT_PASS" -o /dev/null -w "%{http_code}\n" https://ffc-pact-broker.azure.defra.cloud
 
-      - name: Pact CLI version
+      - name: Install Pact Broker CLI (pact-broker-cli v0.6.3)
         run: |
-          docker run --rm pactfoundation/pact-cli:latest pact-broker version
+          curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-broker-cli/main/install.sh | PACT_BROKER_CLI_VERSION=v0.6.3 sh
 
-      - name: Pact CLI list environments
+      - name: Pact Broker CLI version
         run: |
-          docker run --rm pactfoundation/pact-cli:latest pact-broker list-environments -b https://ffc-pact-broker.azure.defra.cloud -u "$PACT_USER" -p "$PACT_PASS"
+          pact-broker-cli --version
 
+      - name: Pact Broker CLI list environments
+        run: |
+          pact-broker-cli list-environments -b https://ffc-pact-broker.azure.defra.cloud -u "$PACT_USER" -p "$PACT_PASS"
