@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: self-hosted
+    env:
+      PACT_USER: ${{ secrets.PACT_USER }}
+      PACT_PASS: ${{ secrets.PACT_PASS }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,10 +23,18 @@ jobs:
       - name: Check PACT_USER
         run: |
           echo "PACT_USER is set: ${PACT_USER:+yes}"
-          echo "PACT_USER length: ${#PACT_USER}"          
-          echo "PACT_USER: ${PACT_USER}"
+          echo "PACT_USER length: ${#PACT_USER}"
 
       - name: Pact Broker connectivity
         run: |
           echo "this is the echo of the user, its a secret"
           curl -s -u "$PACT_USER:$PACT_PASS" -o /dev/null -w "%{http_code}\n" https://ffc-pact-broker.azure.defra.cloud
+
+      - name: Pact CLI version
+        run: |
+          docker run --rm pactfoundation/pact-cli:latest pact-broker version
+
+      - name: Pact CLI list environments
+        run: |
+          docker run --rm pactfoundation/pact-cli:latest pact-broker list-environments -b https://ffc-pact-broker.azure.defra.cloud -u "$PACT_USER" -p "$PACT_PASS"
+
