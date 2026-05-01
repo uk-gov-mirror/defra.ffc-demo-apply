@@ -8,7 +8,9 @@ name: Pact Webhooks
 #       uses: ./.github/workflows/pact-webhooks.yml
 #       with:
 #         command: list
-#       secrets: inherit
+#
+# No 'secrets: inherit' needed — PACT_USER, PACT_PASS and FFCPLATFORM_PAT
+# are environment variables baked into the self-hosted runner image.
 #
 # Or trigger manually via GitHub UI (Actions → Pact Webhooks → Run workflow).
 
@@ -55,11 +57,6 @@ on:
         description: 'Webhook UUID (required for update/delete/test)'
         required: false
         type: string
-    secrets:
-      PACT_USER:
-        required: true
-      PACT_PASS:
-        required: true
 
   workflow_dispatch:
     inputs:
@@ -118,9 +115,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Mask secrets
-        env:
-          PACT_USER: ${{ secrets.PACT_USER }}
-          PACT_PASS: ${{ secrets.PACT_PASS }}
         run: |
           echo "::add-mask::$PACT_USER"
           echo "::add-mask::$PACT_PASS"
@@ -157,8 +151,6 @@ jobs:
 
       - name: Run webhook command
         env:
-          PACT_USER: ${{ secrets.PACT_USER }}
-          PACT_PASS: ${{ secrets.PACT_PASS }}
           INPUT_COMMAND: ${{ inputs.command }}
           INPUT_BROKER_URL: ${{ inputs.broker_url }}
           INPUT_CONSUMER: ${{ inputs.webhook_consumer }}

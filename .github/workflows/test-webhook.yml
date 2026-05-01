@@ -1,4 +1,4 @@
-name: Test-Runners
+name: Test-webhook
 on:
   push:
     branches: [ "test/gh-runners" ]
@@ -11,4 +11,3 @@ jobs:
     uses: ./.github/workflows/pact-webhooks.yml
     with:
       command: list
-    secrets: inherit
