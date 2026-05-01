@@ -22,7 +22,6 @@ jobs:
       
       - name: Check PACT_USER
         run: |
-          env
           echo "PACT_USER is set: ${PACT_USER:+yes}"
           echo "PACT_USER length: ${#PACT_USER}"
 
