@@ -1,0 +1,14 @@
+name: Test-Runners
+on:
+  push:
+    branches: [ "test/gh-runners" ]
+  pull_request:
+    branches: [ "test/gh-runners" ]
+  workflow_dispatch:
+
+jobs:
+  manage-webhook:
+    uses: ./.github/workflows/pact-webhooks.yml
+    with:
+      command: list
+    secrets: inherit

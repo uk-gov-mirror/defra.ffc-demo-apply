@@ -1,0 +1,311 @@
+name: Pact Webhooks
+
+# Reusable workflow for managing webhooks on the FFC Pact Broker.
+#
+# Callable from other workflows in this repo:
+#   jobs:
+#     manage-webhook:
+#       uses: ./.github/workflows/pact-webhooks.yml
+#       with:
+#         command: list
+#       secrets: inherit
+#
+# Or trigger manually via GitHub UI (Actions → Pact Webhooks → Run workflow).
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: 'Command: create | update | delete | test | list | generate-uuid'
+        required: true
+        type: string
+      broker_url:
+        description: 'Pact Broker base URL'
+        required: false
+        type: string
+        default: 'https://ffc-pact-broker.azure.defra.cloud'
+      webhook_consumer:
+        description: 'Consumer name (required for create/update, e.g. grants-ui)'
+        required: false
+        type: string
+      webhook_provider:
+        description: 'Provider name (required for create/update, e.g. grants-ui-backend)'
+        required: false
+        type: string
+      target_repo:
+        description: 'GitHub repo path for the dispatch URL (e.g. DEFRA/grants-ui-backend)'
+        required: false
+        type: string
+        default: 'DEFRA/grants-ui-backend'
+      event_type:
+        description: 'GitHub event_type sent in the dispatch body'
+        required: false
+        type: string
+        default: 'pact_published'
+      pact_event:
+        description: 'Pact event that triggers the webhook'
+        required: false
+        type: string
+        default: 'contract_requiring_verification_published'
+      description:
+        description: 'Webhook description'
+        required: false
+        type: string
+      webhook_uuid:
+        description: 'Webhook UUID (required for update/delete/test)'
+        required: false
+        type: string
+    secrets:
+      PACT_USER:
+        required: true
+      PACT_PASS:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to run'
+        required: true
+        type: choice
+        options:
+          - list
+          - generate-uuid
+          - create
+          - update
+          - delete
+          - test
+      broker_url:
+        description: 'Pact Broker base URL'
+        required: false
+        type: string
+        default: 'https://ffc-pact-broker.azure.defra.cloud'
+      webhook_consumer:
+        description: 'Consumer name (required for create/update, e.g. grants-ui)'
+        required: false
+        type: string
+      webhook_provider:
+        description: 'Provider name (required for create/update, e.g. grants-ui-backend)'
+        required: false
+        type: string
+      target_repo:
+        description: 'GitHub repo path for the dispatch URL'
+        required: false
+        type: string
+        default: 'DEFRA/grants-ui-backend'
+      event_type:
+        description: 'GitHub event_type sent in the dispatch body'
+        required: false
+        type: string
+        default: 'pact_published'
+      pact_event:
+        description: 'Pact event that triggers the webhook'
+        required: false
+        type: string
+        default: 'contract_requiring_verification_published'
+      description:
+        description: 'Webhook description'
+        required: false
+        type: string
+      webhook_uuid:
+        description: 'Webhook UUID (required for update/delete/test)'
+        required: false
+        type: string
+
+jobs:
+  webhook:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mask secrets
+        env:
+          PACT_USER: ${{ secrets.PACT_USER }}
+          PACT_PASS: ${{ secrets.PACT_PASS }}
+        run: |
+          echo "::add-mask::$PACT_USER"
+          echo "::add-mask::$PACT_PASS"
+          echo "::add-mask::$FFCPLATFORM_PAT"
+
+      - name: Validate inputs
+        env:
+          INPUT_COMMAND: ${{ inputs.command }}
+          INPUT_UUID: ${{ inputs.webhook_uuid }}
+          INPUT_CONSUMER: ${{ inputs.webhook_consumer }}
+          INPUT_PROVIDER: ${{ inputs.webhook_provider }}
+        run: |
+          case "$INPUT_COMMAND" in
+            update|delete|test)
+              if [ -z "$INPUT_UUID" ]; then
+                echo "::error::webhook_uuid is required for the '$INPUT_COMMAND' command"
+                exit 1
+              fi
+              ;;
+          esac
+
+          case "$INPUT_COMMAND" in
+            create|update)
+              if [ -z "$INPUT_CONSUMER" ]; then
+                echo "::error::webhook_consumer is required for the '$INPUT_COMMAND' command (e.g. grants-ui)"
+                exit 1
+              fi
+              if [ -z "$INPUT_PROVIDER" ]; then
+                echo "::error::webhook_provider is required for the '$INPUT_COMMAND' command (e.g. grants-ui-backend)"
+                exit 1
+              fi
+              ;;
+          esac
+
+      - name: Run webhook command
+        env:
+          PACT_USER: ${{ secrets.PACT_USER }}
+          PACT_PASS: ${{ secrets.PACT_PASS }}
+          INPUT_COMMAND: ${{ inputs.command }}
+          INPUT_BROKER_URL: ${{ inputs.broker_url }}
+          INPUT_CONSUMER: ${{ inputs.webhook_consumer }}
+          INPUT_PROVIDER: ${{ inputs.webhook_provider }}
+          INPUT_TARGET_REPO: ${{ inputs.target_repo }}
+          INPUT_EVENT_TYPE: ${{ inputs.event_type }}
+          INPUT_PACT_EVENT: ${{ inputs.pact_event }}
+          INPUT_DESCRIPTION: ${{ inputs.description }}
+          INPUT_UUID: ${{ inputs.webhook_uuid }}
+        run: |
+          COMMAND="$INPUT_COMMAND"
+          BROKER_URL="$INPUT_BROKER_URL"
+          CONSUMER="$INPUT_CONSUMER"
+          PROVIDER="$INPUT_PROVIDER"
+          TARGET_REPO="$INPUT_TARGET_REPO"
+          EVENT_TYPE="$INPUT_EVENT_TYPE"
+          PACT_EVENT="$INPUT_PACT_EVENT"
+          DESCRIPTION="$INPUT_DESCRIPTION"
+          UUID="$INPUT_UUID"
+
+          DISPATCH_URL="https://api.github.com/repos/${TARGET_REPO}/dispatches"
+
+          # Build the webhook JSON body.
+          # Pact template variables (${pactbroker.*}) are held in single-quoted shell
+          # segments so the shell never attempts to expand them — they reach the
+          # Pact Broker API as literal strings.
+          build_body() {
+            local links_section=''
+            if [ -n "$CONSUMER" ] && [ -n "$PROVIDER" ]; then
+              links_section='"_links":{"pb:consumer":{"href":"'"${BROKER_URL}/pacticipants/${CONSUMER}"'"},"pb:provider":{"href":"'"${BROKER_URL}/pacticipants/${PROVIDER}"'"}},'
+            elif [ -n "$CONSUMER" ]; then
+              links_section='"_links":{"pb:consumer":{"href":"'"${BROKER_URL}/pacticipants/${CONSUMER}"'"}},'
+            elif [ -n "$PROVIDER" ]; then
+              links_section='"_links":{"pb:provider":{"href":"'"${BROKER_URL}/pacticipants/${PROVIDER}"'"}},'
+            fi
+
+            local desc_section=''
+            [ -n "$DESCRIPTION" ] && desc_section='"description":"'"$DESCRIPTION"'",'
+
+            printf '%s' \
+              '{' \
+              "${links_section}" \
+              "${desc_section}" \
+              '"events":[{"name":"'"$PACT_EVENT"'"}],' \
+              '"request":{' \
+                '"method":"POST",' \
+                '"url":"'"$DISPATCH_URL"'",' \
+                '"headers":{"Content-Type":"application/json","Accept":"application/vnd.github.everest-preview+json"},' \
+                '"username":"ffcplatform",' \
+                '"password":"'"$FFCPLATFORM_PAT"'",' \
+                '"body":{' \
+                  '"event_type":"'"$EVENT_TYPE"'",' \
+                  '"client_payload":{' \
+                    '"pact_url":"${pactbroker.pactUrl}",' \
+                    '"sha":"${pactbroker.providerVersionNumber}",' \
+                    '"branch":"${pactbroker.providerVersionBranch}",' \
+                    '"message":"Verify changed pact for ${pactbroker.consumerName} version ${pactbroker.consumerVersionNumber} branch ${pactbroker.consumerVersionBranch}"' \
+                  '}' \
+                '}' \
+              '}' \
+              '}'
+          }
+
+          case "$COMMAND" in
+            create)
+              BODY=$(build_body)
+              echo "Creating webhook..."
+              HTTP_STATUS=$(curl -s -o /tmp/pact_response.txt -w "%{http_code}" \
+                -X POST \
+                -u "${PACT_USER}:${PACT_PASS}" \
+                -H "Content-Type: application/json" \
+                -d "$BODY" \
+                "${BROKER_URL}/webhooks")
+              cat /tmp/pact_response.txt
+              if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+                echo "::error::Create webhook failed — HTTP ${HTTP_STATUS}"
+                exit 1
+              fi
+              ;;
+
+            update)
+              BODY=$(build_body)
+              echo "Updating webhook ${UUID}..."
+              HTTP_STATUS=$(curl -s -o /tmp/pact_response.txt -w "%{http_code}" \
+                -X PUT \
+                -u "${PACT_USER}:${PACT_PASS}" \
+                -H "Content-Type: application/json" \
+                -d "$BODY" \
+                "${BROKER_URL}/webhooks/${UUID}")
+              cat /tmp/pact_response.txt
+              if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+                echo "::error::Update webhook failed — HTTP ${HTTP_STATUS}"
+                exit 1
+              fi
+              ;;
+
+            delete)
+              echo "Deleting webhook ${UUID}..."
+              HTTP_STATUS=$(curl -s -o /tmp/pact_response.txt -w "%{http_code}" \
+                -X DELETE \
+                -u "${PACT_USER}:${PACT_PASS}" \
+                "${BROKER_URL}/webhooks/${UUID}")
+              if [ "${HTTP_STATUS}" -eq 200 ] || [ "${HTTP_STATUS}" -eq 204 ]; then
+                echo "Webhook ${UUID} deleted (HTTP ${HTTP_STATUS})"
+              else
+                echo "::error::Delete failed — HTTP ${HTTP_STATUS}"
+                cat /tmp/pact_response.txt >&2
+                exit 1
+              fi
+              ;;
+
+            test)
+              echo "Triggering webhook ${UUID}..."
+              HTTP_STATUS=$(curl -s -o /tmp/pact_response.txt -w "%{http_code}" \
+                -X POST \
+                -u "${PACT_USER}:${PACT_PASS}" \
+                -H "Content-Type: application/json" \
+                "${BROKER_URL}/webhooks/${UUID}/execute")
+              cat /tmp/pact_response.txt
+              if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+                echo "::error::Test webhook failed — HTTP ${HTTP_STATUS}"
+                exit 1
+              fi
+              ;;
+
+            list)
+              echo "Fetching webhooks from ${BROKER_URL}..."
+              HTTP_STATUS=$(curl -s -o /tmp/pact_response.txt -w "%{http_code}" \
+                -u "${PACT_USER}:${PACT_PASS}" \
+                -H "Accept: application/hal+json" \
+                "${BROKER_URL}/webhooks")
+              if [ "${HTTP_STATUS}" -ge 200 ] && [ "${HTTP_STATUS}" -lt 300 ]; then
+                cat /tmp/pact_response.txt
+              else
+                echo "::error::List failed — HTTP ${HTTP_STATUS}"
+                cat /tmp/pact_response.txt >&2
+                exit 1
+              fi
+              ;;
+
+            generate-uuid)
+              UUID=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+              echo "Generated UUID: ${UUID}"
+              ;;
+
+            *)
+              echo "::error::Unknown command '${COMMAND}'. Valid: create update delete test list generate-uuid"
+              exit 1
+              ;;
+          esac
