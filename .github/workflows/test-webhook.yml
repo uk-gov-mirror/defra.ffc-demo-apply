@@ -1,9 +1,9 @@
 name: Test-webhook
 on:
-  # push:
-  #   branches: [ "test/gh-runners" ]
-  # pull_request:
-  #   branches: [ "test/gh-runners" ]
+  push:
+    branches: [ "test/gh-runners" ]
+  pull_request:
+    branches: [ "test/gh-runners" ]
   workflow_dispatch:
 
 jobs:
