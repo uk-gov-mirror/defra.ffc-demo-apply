@@ -1,15 +1,16 @@
 name: Test-webhook
 on:
-  push:
-    branches: [ "test/gh-runners" ]
-  pull_request:
-    branches: [ "test/gh-runners" ]
+  # push:
+  #   branches: [ "test/gh-runners" ]
+  # pull_request:
+  #   branches: [ "test/gh-runners" ]
   workflow_dispatch:
 
 jobs:
   manage-webhook:
     uses: ./.github/workflows/pact-webhooks.yml
+    secrets: inherit
     with:
-      command: create
       webhook_consumer: grants-ui
       webhook_provider: grants-ui-backend
+      target_repo: DEFRA/grants-ui-backend
