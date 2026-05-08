@@ -1,7 +1,7 @@
 name: Create Pact Webhooks
 
 # Reusable workflow for managing webhooks on the FFC Pact Broker.
-#
+# Run once to create the webhook.
 # Callable from other workflows in this repo:
 #   jobs:
 #     manage-webhook:
