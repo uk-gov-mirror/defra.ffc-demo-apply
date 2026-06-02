@@ -1,3 +1,5 @@
+jest.mock('../../../../app/messaging/outbox/publish-pending', () => jest.fn())
+
 describe('messaging/outbox/index', () => {
   const ORIGINAL_ENV = process.env
 
