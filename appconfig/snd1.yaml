@@ -10,6 +10,8 @@ secretProviderClass:
     objects: # reading the secret from Azure Key Vault
       - objectName: appInsights-connectionString # secret name in Azure Key Vault
         objectType: secret
+      - objectName: ffc-demo-apply-test-secret
+        objectType: secret
 
   secretObjects: # creating a kubernetes secret from the Azure Key Vault secrets
     - secretName: ffc-demo-apply
@@ -17,3 +19,6 @@ secretProviderClass:
       data:
         - objectName: appInsights-connectionString
           key: APPINSIGHTS_CONNECTIONSTRING # they secret key in kubernetes secret and use in the application
+        - objectName: ffc-demo-apply-test-secret
+          key: TEST_SECRET 
+
