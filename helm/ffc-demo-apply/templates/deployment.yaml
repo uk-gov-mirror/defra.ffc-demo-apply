@@ -1,6 +1,3 @@
 {{- include "ffc-helm-library.deployment" (list . "ffc-demo-apply.deployment") -}}
 {{- define "ffc-demo-apply.deployment" -}}
-metadata:
-  annotations:
-    reloader.stakater.com/auto: "true"
 {{- end -}}
