@@ -49,6 +49,6 @@ extends:
     dev_params:
       livenessProbe.timeoutSeconds: $(dev_livenessProbe_timeoutSeconds)      
     # failOnThreshold: high
-    enableServiceNowChangeCreationDev: true
+    enableServiceNowChangeCreationDev: false
     enableServiceNowChangeCreation: true
 
